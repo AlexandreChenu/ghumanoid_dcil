@@ -326,7 +326,7 @@ class GHumanoidGoal(GHumanoid, GoalEnv, utils.EzPickle, ABC):
 	def set_state(self, sim_state, set_state):
 		if set_state:
 			self.env.set_inner_state(sim_state)
-			self.state = self.env._get_full_state().copy()
+			self.state = self.env._get_state().copy()
 
 	def get_state(self):
 		state = (self.state.copy(), self.env.get_inner_state())
