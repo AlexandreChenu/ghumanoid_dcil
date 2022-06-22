@@ -117,7 +117,7 @@ class GHumanoid(mujoco_env.MujocoEnv, utils.EzPickle, ABC):
 		self.done = False
 		self.steps = 0
 
-		self.max_episode_steps = 50
+		self.max_episode_steps = 100
 
 		self.rooms = []
 
@@ -259,6 +259,7 @@ class GHumanoidGoal(GHumanoid, GoalEnv, utils.EzPickle, ABC):
 
 		truncation = truncation * (1 - is_success).reshape(1,)
 		info = {'is_success': is_success,
+                'done_from_env': np.array(done,dtype=np.intc).reshape(1,),
 				'truncation': truncation}
 		self.done = (done or bool(truncation)) or bool(is_success)
 
