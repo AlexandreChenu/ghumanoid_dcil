@@ -25,6 +25,10 @@ from gym import error
 import numpy as np
 import torch
 from matplotlib import collections as mc
+
+from collections import defaultdict, namedtuple
+
+import copy
 # from IPython import embed
 
 # from .skill_manager_fetchenv import SkillsManager
@@ -112,6 +116,7 @@ class GHumanoid(mujoco_env.MujocoEnv, utils.EzPickle, ABC):
 		self.init_qpos = self.init_sim_state.qpos.copy()
 		self.init_qvel = self.init_sim_state.qvel.copy()
 
+		self.render_cache = defaultdict(dict)
 
 		self.state = self.init_state.copy()
 		self.done = False
@@ -120,6 +125,8 @@ class GHumanoid(mujoco_env.MujocoEnv, utils.EzPickle, ABC):
 		self.max_episode_steps = 100
 
 		self.rooms = []
+
+		self.viewer = mujoco_py.MjViewer(self.env.sim)
 
 	def __getattr__(self, e):
 		assert self.env is not self
@@ -160,12 +167,62 @@ class GHumanoid(mujoco_env.MujocoEnv, utils.EzPickle, ABC):
 
 	def state_vector(self):
 		return self.state.copy()
-
-	def render(self):
-		return self.env.render()
+	#
+	# def render(self):
+	# 	return self.env.render()
 
 	def plot(self, ax):
 		pass
+
+	def render(self, mode='new', width=1080, height=1080, distance=3, azimuth=170, elevation=-30, cache_key='current'):
+		key = (distance, azimuth, elevation)
+		target = 'torso'
+
+		if key not in self.render_cache[cache_key]:
+			# The mujoco renderer is stupid and changes the inner state in minor
+			# ways, which can ruin some long trajectories. Because of this, we
+			# save the inner state before rendering and restore it afterwards.
+			inner_state = copy.deepcopy(self.env.get_inner_state())
+
+			if self.viewer is None:
+				if 'CUSTOM_DOCKER_IMAGE' not in os.environ:
+					# We detected that we are running on desktop, in which case we should
+					# use glfw as the mode.
+					mode = 'glfw'
+				if not self.__class__.MJ_INIT and mode == 'glfw':
+					print("WTF")
+					try:
+						mujoco_py.MjViewer(self.env.sim)
+						print("WOW")
+					except Exception:
+						print('Failed to initialize GLFW, rendering may or may not work.')
+					self.__class__.MJ_INIT = True
+
+				device = -1
+
+				self.viewer = mujoco_py.MjViewer(self.env.sim)
+
+
+				self.viewer.scn.flags[2] = 0 # Disable reflections (~25% speedup)
+				body_id = self.env.sim.model.body_name2id(target)
+				lookat = self.env.sim.data.body_xpos[body_id]
+				for idx, value in enumerate(lookat):
+					self.viewer.cam.lookat[idx] = value
+
+			self.viewer.cam.distance = distance
+			self.viewer.cam.azimuth = azimuth
+			self.viewer.cam.elevation = elevation
+			#self.viewer.render(width, height)
+			self.viewer.render()
+			img = self.viewer.read_pixels(width, height, depth=False)
+			img = img[::-1, :, :]
+
+			self.env.set_inner_state(inner_state)
+
+			self.render_cache[cache_key][key] = img
+
+		return self.render_cache[cache_key][key]
+
 
 
 @torch.no_grad()
@@ -259,7 +316,7 @@ class GHumanoidGoal(GHumanoid, GoalEnv, utils.EzPickle, ABC):
 
 		truncation = truncation * (1 - is_success).reshape(1,)
 		info = {'is_success': is_success,
-                'done_from_env': np.array(done,dtype=np.intc).reshape(1,),
+				'done_from_env': np.array(done,dtype=np.intc).reshape(1,),
 				'truncation': truncation}
 		self.done = (done or bool(truncation)) or bool(is_success)
 
