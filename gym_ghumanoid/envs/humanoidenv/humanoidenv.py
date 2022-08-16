@@ -86,7 +86,7 @@ class HumanoidEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     # set simulation state (more than just the position and velocity) to saved one
     def set_inner_state(self, saved_state):
         self.sim.set_state(saved_state)
-        #return self.sim.get_state()
+        self.sim.forward()#return self.sim.get_state()
         return self._get_state()
 
     def viewer_setup(self):
